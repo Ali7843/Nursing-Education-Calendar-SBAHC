@@ -335,6 +335,7 @@
             border-radius: 12px;
             padding: 2rem;
             box-shadow: var(--shadow);
+            touch-action: pan-y pinch-zoom;
         }
         
         .calendar-header {
@@ -381,6 +382,50 @@
             display: grid;
             grid-template-columns: repeat(7, 1fr);
             gap: 0.75rem;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        .calendar-wrapper {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .calendar-slide {
+            display: flex;
+            transition: transform 0.3s ease;
+        }
+        
+        .calendar-page {
+            min-width: 100%;
+            flex-shrink: 0;
+        }
+        
+        .touch-hint {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 1rem;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 10;
+        }
+        
+        .touch-hint.left {
+            left: 1rem;
+        }
+        
+        .touch-hint.right {
+            right: 1rem;
+        }
+        
+        .touch-hint.visible {
+            opacity: 1;
         }
         
         .calendar-day-header {
@@ -426,6 +471,34 @@
             color: var(--primary-color);
             font-weight: 500;
             line-height: 1.4;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0;
+        }
+        
+        .calendar-day-event:hover {
+            color: var(--primary-dark);
+        }
+        
+        .calendar-day-event .badge {
+            font-size: 0.675rem;
+            padding: 0.125rem 0.375rem;
+        }
+        
+        .calendar-event-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.75rem;
+            color: var(--primary-color);
+            text-decoration: none;
+            margin-top: 0.25rem;
+        }
+        
+        .calendar-event-link:hover {
+            color: var(--primary-dark);
         }
         
         footer {
@@ -1067,7 +1140,35 @@
             document.getElementById("output").style.opacity = "1";
         }
 
-        // Calendar view functionality
+        // Simple touch navigation
+        let touchStartX = 0;
+        let touchEndX = 0;
+        
+        function handleTouchStart(event) {
+            touchStartX = event.touches[0].clientX;
+        }
+        
+        function handleTouchEnd(event) {
+            touchEndX = event.changedTouches[0].clientX;
+            handleSwipe();
+        }
+        
+        function handleSwipe() {
+            const swipeDistance = touchEndX - touchStartX;
+            const minSwipeDistance = 50;
+            
+            if (Math.abs(swipeDistance) > minSwipeDistance) {
+                if (swipeDistance > 0) {
+                    // Swipe right - Previous month
+                    document.getElementById('prevMonth').click();
+                } else {
+                    // Swipe left - Next month
+                    document.getElementById('nextMonth').click();
+                }
+            }
+        }
+        
+        // Enhanced calendar generation with smooth transitions
         function generateCalendar(date) {
             const year = date.getFullYear();
             const month = date.getMonth();
@@ -1075,15 +1176,10 @@
             document.querySelector(".calendar-title").textContent = 
                 new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
             
-            const firstDay = new Date(year, month, 1);
-            const lastDay = new Date(year, month + 1, 0);
-            const daysInMonth = lastDay.getDate();
-            const startingDayOfWeek = firstDay.getDay();
-            
             const calendarGrid = document.getElementById("calendarGrid");
             calendarGrid.innerHTML = "";
             
-            // Add day headers
+            // Add day headers with enhanced styling
             const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
             daysOfWeek.forEach(day => {
                 const dayHeader = document.createElement("div");
@@ -1091,6 +1187,11 @@
                 dayHeader.textContent = day;
                 calendarGrid.appendChild(dayHeader);
             });
+            
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            const daysInMonth = lastDay.getDate();
+            const startingDayOfWeek = firstDay.getDay();
             
             // Add empty cells for days before first day of month
             for (let i = 0; i < startingDayOfWeek; i++) {
@@ -1109,7 +1210,6 @@
                 dayNumber.textContent = day;
                 dayCell.appendChild(dayNumber);
                 
-                // Find events for this day
                 const currentDate = new Date(year, month, day);
                 const dayEvents = parsedEvents.filter(event => {
                     return event.date.getDate() === day && 
@@ -1119,17 +1219,48 @@
                 
                 if (dayEvents.length > 0) {
                     dayCell.classList.add("has-event");
+                    
+                    // Create container for events
+                    const eventsContainer = document.createElement("div");
+                    eventsContainer.className = "calendar-day-events";
+                    
                     dayEvents.forEach((event, index) => {
+                        const isJournalClub = event.isJournalClub;
+                        const link = isJournalClub ? journalClubLink : educationLink;
+                        const badgeClass = isJournalClub ? "badge-journal" : "badge-education";
+                        const badgeText = isJournalClub ? "JC" : "ED";
+                        
                         if (index === 0 || index === dayEvents.length - 1) {
                             const eventElement = document.createElement("div");
                             eventElement.className = "calendar-day-event";
-                            eventElement.textContent = event.title;
+                            
+                            // Add badge
+                            const badge = document.createElement("span");
+                            badge.className = `badge ${badgeClass}`;
+                            badge.textContent = badgeText;
+                            eventElement.appendChild(badge);
+                            
+                            // Add event title
+                            const titleSpan = document.createElement("span");
+                            titleSpan.textContent = event.title;
                             if (index === 0 && dayEvents.length > 1) {
-                                eventElement.textContent += ` (+${dayEvents.length - 1})`;
+                                titleSpan.textContent += ` (+${dayEvents.length - 1})`;
                             }
-                            dayCell.appendChild(eventElement);
+                            eventElement.appendChild(titleSpan);
+                            
+                            // Add link
+                            const linkElement = document.createElement("a");
+                            linkElement.href = link;
+                            linkElement.target = "_blank";
+                            linkElement.className = "calendar-event-link";
+                            linkElement.innerHTML = `Join <i class="fas fa-external-link-alt"></i>`;
+                            eventElement.appendChild(linkElement);
+                            
+                            eventsContainer.appendChild(eventElement);
                         }
                     });
+                    
+                    dayCell.appendChild(eventsContainer);
                 }
                 
                 calendarGrid.appendChild(dayCell);
@@ -1241,6 +1372,11 @@
             // Set up event listeners
             document.getElementById("userInput").addEventListener("input", debounceSearch(searchEvents, 300));
             document.getElementById("searchButton").addEventListener("click", searchEvents);
+            
+            // Add touch events for calendar
+            const calendarView = document.getElementById('calendarView');
+            calendarView.addEventListener('touchstart', handleTouchStart, false);
+            calendarView.addEventListener('touchend', handleTouchEnd, false);
             
             // Tab switching
             document.querySelectorAll(".tab").forEach(tab => {
